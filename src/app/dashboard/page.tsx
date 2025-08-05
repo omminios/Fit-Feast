@@ -4,14 +4,22 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { pantryUtils, recipeUtils } from '@/lib/supabase-utils';
 import { useRouter } from 'next/navigation';
+import IngredientAutocomplete from '@/components/IngredientAutocomplete';
+import MacroDoughnutChart from '@/components/MacroDoughnutChart';
 
 interface PantryItem {
   id: string;
   status: string;
+  quantity: number;
+  unit: string;
+  expiration_date: string | null;
   ingredients: {
     id: string;
     name: string;
     category: string | null;
+    protein_per_100g: number;
+    carbs_per_100g: number;
+    fats_per_100g: number;
   };
 }
 
@@ -33,9 +41,241 @@ export default function Dashboard() {
   const [makeableRecipes, setMakeableRecipes] = useState<Recipe[]>([]);
   const [nearMissRecipes, setNearMissRecipes] = useState<any[]>([]);
   const [savedRecipes, setSavedRecipes] = useState<any[]>([]);
-  const [newIngredient, setNewIngredient] = useState('');
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'pantry' | 'recipes' | 'saved'>('pantry');
+
+  // Function to get appropriate units based on ingredient category and name
+  const getAppropriateUnits = (ingredient: any) => {
+    const { category, name } = ingredient;
+    
+    // Protein-based units
+    if (category === 'Protein') {
+      if (name.includes('breast') || name.includes('steak') || name.includes('chop')) {
+        return [
+          { value: 'piece', label: 'piece(s)' },
+          { value: 'oz', label: 'oz' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'lb', label: 'lb' }
+        ];
+      }
+      if (name.includes('ground') || name.includes('mince')) {
+        return [
+          { value: 'oz', label: 'oz' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'lb', label: 'lb' },
+          { value: 'cup', label: 'cup(s)' }
+        ];
+      }
+      if (name.includes('fish') || name.includes('salmon') || name.includes('tuna') || name.includes('tilapia') || name.includes('cod')) {
+        return [
+          { value: 'fillet', label: 'fillet(s)' },
+          { value: 'oz', label: 'oz' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'piece', label: 'piece(s)' }
+        ];
+      }
+      if (name.includes('shrimp') || name.includes('prawn')) {
+        return [
+          { value: 'piece', label: 'piece(s)' },
+          { value: 'oz', label: 'oz' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'cup', label: 'cup(s)' }
+        ];
+      }
+      if (name.includes('egg')) {
+        return [
+          { value: 'piece', label: 'piece(s)' },
+          { value: 'whites', label: 'white(s)' },
+          { value: 'yolks', label: 'yolk(s)' }
+        ];
+      }
+      if (name.includes('protein powder')) {
+        return [
+          { value: 'scoop', label: 'scoop(s)' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'oz', label: 'oz' }
+        ];
+      }
+      // Default protein units
+      return [
+        { value: 'oz', label: 'oz' },
+        { value: 'gram', label: 'gram(s)' },
+        { value: 'lb', label: 'lb' },
+        { value: 'piece', label: 'piece(s)' }
+      ];
+    }
+
+    // Vegetable-based units
+    if (category === 'Vegetable') {
+      if (name.includes('leafy') || name.includes('spinach') || name.includes('kale') || name.includes('lettuce')) {
+        return [
+          { value: 'cup', label: 'cup(s)' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'oz', label: 'oz' },
+          { value: 'handful', label: 'handful(s)' }
+        ];
+      }
+      if (name.includes('pepper') || name.includes('tomato') || name.includes('cucumber') || name.includes('zucchini')) {
+        return [
+          { value: 'piece', label: 'piece(s)' },
+          { value: 'cup', label: 'cup(s)' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'oz', label: 'oz' }
+        ];
+      }
+      if (name.includes('onion') || name.includes('garlic')) {
+        return [
+          { value: 'piece', label: 'piece(s)' },
+          { value: 'clove', label: 'clove(s)' },
+          { value: 'cup', label: 'cup(s)' },
+          { value: 'gram', label: 'gram(s)' }
+        ];
+      }
+      // Default vegetable units
+      return [
+        { value: 'cup', label: 'cup(s)' },
+        { value: 'piece', label: 'piece(s)' },
+        { value: 'gram', label: 'gram(s)' },
+        { value: 'oz', label: 'oz' }
+      ];
+    }
+
+    // Grain-based units
+    if (category === 'Grain') {
+      if (name.includes('rice') || name.includes('quinoa') || name.includes('oats') || name.includes('pasta')) {
+        return [
+          { value: 'cup', label: 'cup(s)' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'oz', label: 'oz' },
+          { value: 'tbsp', label: 'tbsp' }
+        ];
+      }
+      if (name.includes('bread')) {
+        return [
+          { value: 'slice', label: 'slice(s)' },
+          { value: 'piece', label: 'piece(s)' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'oz', label: 'oz' }
+        ];
+      }
+      // Default grain units
+      return [
+        { value: 'cup', label: 'cup(s)' },
+        { value: 'gram', label: 'gram(s)' },
+        { value: 'oz', label: 'oz' },
+        { value: 'tbsp', label: 'tbsp' }
+      ];
+    }
+
+    // Fat-based units
+    if (category === 'Fat') {
+      if (name.includes('oil')) {
+        return [
+          { value: 'tbsp', label: 'tbsp' },
+          { value: 'tsp', label: 'tsp' },
+          { value: 'ml', label: 'ml' },
+          { value: 'cup', label: 'cup(s)' }
+        ];
+      }
+      if (name.includes('nut') || name.includes('seed')) {
+        return [
+          { value: 'cup', label: 'cup(s)' },
+          { value: 'tbsp', label: 'tbsp' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'oz', label: 'oz' }
+        ];
+      }
+      if (name.includes('butter') || name.includes('peanut') || name.includes('almond')) {
+        return [
+          { value: 'tbsp', label: 'tbsp' },
+          { value: 'tsp', label: 'tsp' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'oz', label: 'oz' }
+        ];
+      }
+      // Default fat units
+      return [
+        { value: 'tbsp', label: 'tbsp' },
+        { value: 'tsp', label: 'tsp' },
+        { value: 'gram', label: 'gram(s)' },
+        { value: 'oz', label: 'oz' }
+      ];
+    }
+
+    // Dairy-based units
+    if (category === 'Dairy') {
+      if (name.includes('milk')) {
+        return [
+          { value: 'cup', label: 'cup(s)' },
+          { value: 'ml', label: 'ml' },
+          { value: 'oz', label: 'oz' },
+          { value: 'tbsp', label: 'tbsp' }
+        ];
+      }
+      if (name.includes('cheese')) {
+        return [
+          { value: 'oz', label: 'oz' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'cup', label: 'cup(s)' },
+          { value: 'slice', label: 'slice(s)' }
+        ];
+      }
+      if (name.includes('yogurt')) {
+        return [
+          { value: 'cup', label: 'cup(s)' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'oz', label: 'oz' },
+          { value: 'tbsp', label: 'tbsp' }
+        ];
+      }
+      // Default dairy units
+      return [
+        { value: 'cup', label: 'cup(s)' },
+        { value: 'gram', label: 'gram(s)' },
+        { value: 'oz', label: 'oz' },
+        { value: 'tbsp', label: 'tbsp' }
+      ];
+    }
+
+    // Fruit-based units
+    if (category === 'Fruit') {
+      if (name.includes('berry')) {
+        return [
+          { value: 'cup', label: 'cup(s)' },
+          { value: 'gram', label: 'gram(s)' },
+          { value: 'oz', label: 'oz' },
+          { value: 'piece', label: 'piece(s)' }
+        ];
+      }
+      // Default fruit units
+      return [
+        { value: 'piece', label: 'piece(s)' },
+        { value: 'cup', label: 'cup(s)' },
+        { value: 'gram', label: 'gram(s)' },
+        { value: 'oz', label: 'oz' }
+      ];
+    }
+
+    // Seasoning-based units
+    if (category === 'Seasoning') {
+      return [
+        { value: 'tsp', label: 'tsp' },
+        { value: 'tbsp', label: 'tbsp' },
+        { value: 'gram', label: 'gram(s)' },
+        { value: 'pinch', label: 'pinch(es)' }
+      ];
+    }
+
+    // Default units for any other category
+    return [
+      { value: 'piece', label: 'piece(s)' },
+      { value: 'cup', label: 'cup(s)' },
+      { value: 'gram', label: 'gram(s)' },
+      { value: 'oz', label: 'oz' },
+      { value: 'tbsp', label: 'tbsp' },
+      { value: 'tsp', label: 'tsp' }
+    ];
+  };
 
   useEffect(() => {
     if (user) {
@@ -67,13 +307,11 @@ export default function Dashboard() {
     }
   };
 
-  const handleAddIngredient = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !newIngredient.trim()) return;
+  const handleAddIngredient = async (ingredient: any, quantity: number, unit: string, expirationDate?: string) => {
+    if (!user) return;
 
     try {
-      await pantryUtils.addToPantry(user.id, newIngredient.trim());
-      setNewIngredient('');
+      await pantryUtils.addToPantry(user.id, ingredient.name, quantity, unit, expirationDate);
       await loadDashboardData(); // Refresh data
     } catch (error) {
       console.error('Error adding ingredient:', error);
@@ -88,6 +326,28 @@ export default function Dashboard() {
       await loadDashboardData(); // Refresh data
     } catch (error) {
       console.error('Error marking ingredient as used:', error);
+    }
+  };
+
+  const handleUpdateQuantity = async (pantryItemId: string, quantity: number, unit: string) => {
+    if (!user) return;
+
+    try {
+      await pantryUtils.updatePantryItemQuantity(pantryItemId, quantity, unit);
+      await loadDashboardData(); // Refresh data
+    } catch (error) {
+      console.error('Error updating ingredient quantity:', error);
+    }
+  };
+
+  const handleUpdateExpiration = async (pantryItemId: string, expirationDate: string | null) => {
+    if (!user) return;
+
+    try {
+      await pantryUtils.updatePantryItemExpiration(pantryItemId, expirationDate);
+      await loadDashboardData(); // Refresh data
+    } catch (error) {
+      console.error('Error updating ingredient expiration date:', error);
     }
   };
 
@@ -183,40 +443,125 @@ export default function Dashboard() {
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Your Pantry</h2>
                 
                 {/* Add Ingredient Form */}
-                <form onSubmit={handleAddIngredient} className="mb-6">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newIngredient}
-                      onChange={(e) => setNewIngredient(e.target.value)}
-                      placeholder="Add an ingredient (e.g., chicken breast, broccoli)"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500"
-                    />
-                    <button
-                      type="submit"
-                      className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </form>
+                <div className="mb-6">
+                  <IngredientAutocomplete
+                    onSelect={handleAddIngredient}
+                    placeholder="Add an ingredient (e.g., chicken breast, broccoli)"
+                  />
+                </div>
 
                 {/* Pantry Items List */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {pantryItems.map((item) => (
                     <div
                       key={item.id}
-                      className="bg-white p-4 rounded-lg border border-gray-200 flex justify-between items-center"
+                      className="bg-white p-4 rounded-lg border border-gray-200"
                     >
-                      <span className="font-medium text-gray-900 capitalize">
-                        {item.ingredients?.name || 'Unknown'}
-                      </span>
-                      <button
-                        onClick={() => handleMarkAsUsed(item.id)}
-                        className="text-sm text-red-600 hover:text-red-800"
-                      >
-                        Mark Used
-                      </button>
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <h3 className="font-medium text-gray-900 capitalize">
+                            {item.ingredients?.name || 'Unknown'}
+                          </h3>
+                          <p className="text-sm text-gray-600">
+                            {item.quantity} {item.unit}
+                          </p>
+                          {/* Expiration Date Display */}
+                          {item.expiration_date && (
+                            <div className="mt-1">
+                              {(() => {
+                                const today = new Date();
+                                const expirationDate = new Date(item.expiration_date);
+                                const daysUntilExpiry = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                
+                                let statusClass = '';
+                                let statusText = '';
+                                
+                                if (daysUntilExpiry < 0) {
+                                  statusClass = 'text-red-600 bg-red-50';
+                                  statusText = `Expired ${Math.abs(daysUntilExpiry)} days ago`;
+                                } else if (daysUntilExpiry <= 3) {
+                                  statusClass = 'text-orange-600 bg-orange-50';
+                                  statusText = `Expires in ${daysUntilExpiry} day${daysUntilExpiry === 1 ? '' : 's'}`;
+                                } else if (daysUntilExpiry <= 7) {
+                                  statusClass = 'text-yellow-600 bg-yellow-50';
+                                  statusText = `Expires in ${daysUntilExpiry} days`;
+                                } else {
+                                  statusClass = 'text-green-600 bg-green-50';
+                                  statusText = `Expires in ${daysUntilExpiry} days`;
+                                }
+                                
+                                return (
+                                  <div className={`text-xs px-2 py-1 rounded-full inline-block ${statusClass}`}>
+                                    {statusText}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleMarkAsUsed(item.id)}
+                          className="text-sm text-red-600 hover:text-red-800 ml-2"
+                        >
+                          Mark Used
+                        </button>
+                      </div>
+                      
+                      {/* Macros Display */}
+                      <div className="mb-3">
+                        <MacroDoughnutChart
+                          data={{
+                            protein: parseFloat(((item.ingredients?.protein_per_100g || 0) * item.quantity / 100).toFixed(1)),
+                            carbs: parseFloat(((item.ingredients?.carbs_per_100g || 0) * item.quantity / 100).toFixed(1)),
+                            fats: parseFloat(((item.ingredients?.fats_per_100g || 0) * item.quantity / 100).toFixed(1))
+                          }}
+                          size={100}
+                          showLegend={true}
+                          centerText={`${((item.ingredients?.protein_per_100g || 0) * item.quantity / 100).toFixed(1)}g`}
+                        />
+                      </div>
+                      
+                      {/* Quantity Update */}
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min="0.1"
+                          step="0.1"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const newQuantity = parseFloat(e.target.value) || 1;
+                            handleUpdateQuantity(item.id, newQuantity, item.unit);
+                          }}
+                          className="flex-1 border rounded px-2 py-1 text-sm"
+                        />
+                        <select
+                          value={item.unit}
+                          onChange={(e) => handleUpdateQuantity(item.id, item.quantity, e.target.value)}
+                          className="border rounded px-2 py-1 text-sm"
+                        >
+                          {getAppropriateUnits(item.ingredients).map((unitOption) => (
+                            <option key={unitOption.value} value={unitOption.value}>
+                              {unitOption.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {/* Expiration Date Update */}
+                      <div className="mt-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Expiration Date</label>
+                        <input
+                          type="date"
+                          value={item.expiration_date || ''}
+                          onChange={(e) => handleUpdateExpiration(item.id, e.target.value || null)}
+                          min={new Date().toISOString().split('T')[0]}
+                          className="w-full border rounded px-2 py-1 text-xs"
+                          placeholder="Optional"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          {item.expiration_date ? 'Click to edit' : 'Add expiration date to reduce waste'}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -249,19 +594,17 @@ export default function Dashboard() {
                     <div className="p-4">
                       <h3 className="font-semibold text-lg text-gray-900 mb-2">{recipe.name}</h3>
                       
-                      <div className="grid grid-cols-3 gap-2 mb-3 text-sm">
-                        <div className="text-center">
-                          <div className="font-medium text-blue-600">{recipe.protein_g_per_serving}g</div>
-                          <div className="text-gray-500">Protein</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-medium text-orange-600">{recipe.carbs_g_per_serving}g</div>
-                          <div className="text-gray-500">Carbs</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-medium text-red-600">{recipe.fats_g_per_serving}g</div>
-                          <div className="text-gray-500">Fats</div>
-                        </div>
+                      <div className="mb-3">
+                        <MacroDoughnutChart
+                          data={{
+                            protein: recipe.protein_g_per_serving,
+                            carbs: recipe.carbs_g_per_serving,
+                            fats: recipe.fats_g_per_serving
+                          }}
+                          size={120}
+                          showLegend={true}
+                          centerText={`${recipe.protein_g_per_serving}g`}
+                        />
                       </div>
                       
                       <div className="flex justify-between items-center text-sm text-gray-600 mb-3">
@@ -306,6 +649,20 @@ export default function Dashboard() {
                     )}
                     <div className="p-4">
                       <h3 className="font-semibold text-lg text-gray-900 mb-2">{recipe.name}</h3>
+                      
+                      <div className="mb-3">
+                        <MacroDoughnutChart
+                          data={{
+                            protein: recipe.protein_g_per_serving,
+                            carbs: recipe.carbs_g_per_serving,
+                            fats: recipe.fats_g_per_serving
+                          }}
+                          size={100}
+                          showLegend={true}
+                          centerText={`${recipe.protein_g_per_serving}g`}
+                        />
+                      </div>
+                      
                       <div className="mb-2 text-sm text-gray-700">
                         <span className="font-medium">Missing Ingredients:</span>{' '}
                         {missingIngredients.map((ing: any, idx: number) => (
@@ -315,6 +672,7 @@ export default function Dashboard() {
                           </span>
                         ))}
                       </div>
+                      
                       <div className="flex gap-2">
                         <button className="flex-1 bg-green-600 text-white py-2 px-3 rounded-md text-sm hover:bg-green-700">
                           View Recipe
@@ -357,19 +715,17 @@ export default function Dashboard() {
                     <div className="p-4">
                       <h3 className="font-semibold text-lg text-gray-900 mb-2">{saved.recipes.name}</h3>
                       
-                      <div className="grid grid-cols-3 gap-2 mb-3 text-sm">
-                        <div className="text-center">
-                          <div className="font-medium text-blue-600">{saved.recipes.protein_g_per_serving}g</div>
-                          <div className="text-gray-500">Protein</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-medium text-orange-600">{saved.recipes.carbs_g_per_serving}g</div>
-                          <div className="text-gray-500">Carbs</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-medium text-red-600">{saved.recipes.fats_g_per_serving}g</div>
-                          <div className="text-gray-500">Fats</div>
-                        </div>
+                      <div className="mb-3">
+                        <MacroDoughnutChart
+                          data={{
+                            protein: saved.recipes.protein_g_per_serving,
+                            carbs: saved.recipes.carbs_g_per_serving,
+                            fats: saved.recipes.fats_g_per_serving
+                          }}
+                          size={120}
+                          showLegend={true}
+                          centerText={`${saved.recipes.protein_g_per_serving}g`}
+                        />
                       </div>
                       
                       <div className="flex justify-between items-center text-sm text-gray-600 mb-3">

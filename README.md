@@ -5,6 +5,9 @@ A smart meal planning web application designed for fitness enthusiasts who want 
 ## Features
 
 - **Pantry Power-Up**: Track your kitchen ingredients and never let food go to waste
+  - Add ingredients with optional expiration dates to reduce food waste
+  - Visual indicators for expired or soon-to-expire items
+  - Edit quantities and expiration dates for existing items
 - **Gainz-Fuel Recipes**: Discover high-protein, macro-friendly recipes that match your available ingredients
 - **My Stacked Recipes**: Save your favorite recipes for quick access and build your personal collection
 - **User Authentication**: Secure sign-up and sign-in with email/password or Google OAuth
@@ -94,7 +97,7 @@ The application uses the following main tables:
 
 - **users**: User profiles (extends Supabase Auth)
 - **ingredients**: Available ingredients (pre-populated)
-- **user_pantry_items**: User's current pantry items
+- **user_pantry_items**: User's current pantry items with optional expiration dates
 - **recipes**: Curated fitness recipes (pre-populated)
 - **recipe_ingredients**: Recipe-ingredient relationships
 - **saved_recipes**: User's saved recipe collection
@@ -108,9 +111,11 @@ The application uses the following main tables:
 - Protected routes
 
 ### Pantry Management
-- Add ingredients to personal pantry
+- Add ingredients to personal pantry with optional expiration dates
+- Visual indicators for food expiration status (expired, expiring soon, good)
 - Mark ingredients as used
-- View current available ingredients
+- View current available ingredients with macro information
+- Edit quantities and expiration dates for existing items
 
 ### Recipe Discovery
 - Algorithm to match user's pantry with available recipes

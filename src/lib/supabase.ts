@@ -34,16 +34,25 @@ export interface Database {
           id: string;
           name: string;
           category: string | null;
+          protein_per_100g: number;
+          carbs_per_100g: number;
+          fats_per_100g: number;
         };
         Insert: {
           id?: string;
           name: string;
           category?: string | null;
+          protein_per_100g?: number;
+          carbs_per_100g?: number;
+          fats_per_100g?: number;
         };
         Update: {
           id?: string;
           name?: string;
           category?: string | null;
+          protein_per_100g?: number;
+          carbs_per_100g?: number;
+          fats_per_100g?: number;
         };
       };
       user_pantry_items: {
@@ -51,6 +60,8 @@ export interface Database {
           id: string;
           user_id: string;
           ingredient_id: string;
+          quantity: number;
+          unit: string;
           status: 'available' | 'used';
           added_at: string;
         };
@@ -58,6 +69,8 @@ export interface Database {
           id?: string;
           user_id: string;
           ingredient_id: string;
+          quantity?: number;
+          unit?: string;
           status?: 'available' | 'used';
           added_at?: string;
         };
@@ -65,6 +78,8 @@ export interface Database {
           id?: string;
           user_id?: string;
           ingredient_id?: string;
+          quantity?: number;
+          unit?: string;
           status?: 'available' | 'used';
           added_at?: string;
         };

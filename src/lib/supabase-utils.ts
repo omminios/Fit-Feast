@@ -65,11 +65,17 @@ export const pantryUtils = {
       .select(`
         id,
         status,
+        quantity,
+        unit,
+        expiration_date,
         added_at,
         ingredients:ingredient_id (
           id,
           name,
-          category
+          category,
+          protein_per_100g,
+          carbs_per_100g,
+          fats_per_100g
         )
       `)
       .eq('user_id', userId)
@@ -79,8 +85,8 @@ export const pantryUtils = {
     return data;
   },
 
-  // Add ingredient to pantry
-  async addToPantry(userId: string, ingredientName: string) {
+  // Add ingredient to pantry with quantity, unit, and optional expiration date
+  async addToPantry(userId: string, ingredientName: string, quantity: number = 1, unit: string = 'piece', expirationDate?: string) {
     // First, find or create the ingredient
     let { data: ingredient, error: ingredientError } = await supabase
       .from('ingredients')
@@ -107,7 +113,7 @@ export const pantryUtils = {
     // Check if the user already has this ingredient in their pantry (used or available)
     const { data: existingPantryItem, error: pantryError } = await supabase
       .from('user_pantry_items')
-      .select('id, status')
+      .select('id, status, quantity, unit, expiration_date')
       .eq('user_id', userId)
       .eq('ingredient_id', ingredient.id)
       .single();
@@ -118,18 +124,34 @@ export const pantryUtils = {
     
     if (existingPantryItem) {
       if (existingPantryItem.status === 'used') {
-        // Update status to available
+        // Update status to available and update quantity/unit and expiration date
         const { data, error } = await supabase
           .from('user_pantry_items')
-          .update({ status: 'available' })
+          .update({ 
+            status: 'available',
+            quantity: quantity,
+            unit: unit,
+            expiration_date: expirationDate || null
+          })
           .eq('id', existingPantryItem.id)
           .select()
           .single();
         if (error) throw error;
         return data;
       } else {
-        // Already available, do nothing or throw a friendly error
-        throw new Error('This ingredient is already in your pantry!');
+        // Already available, update quantity and expiration date
+        const { data, error } = await supabase
+          .from('user_pantry_items')
+          .update({ 
+            quantity: existingPantryItem.quantity + quantity,
+            unit: unit,
+            expiration_date: expirationDate || existingPantryItem.expiration_date
+          })
+          .eq('id', existingPantryItem.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
       }
     }
     
@@ -139,8 +161,37 @@ export const pantryUtils = {
       .insert({
         user_id: userId,
         ingredient_id: ingredient.id,
+        quantity: quantity,
+        unit: unit,
         status: 'available',
+        expiration_date: expirationDate || null,
       })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  // Update pantry item quantity
+  async updatePantryItemQuantity(pantryItemId: string, quantity: number, unit: string) {
+    const { data, error } = await supabase
+      .from('user_pantry_items')
+      .update({ quantity: quantity, unit: unit })
+      .eq('id', pantryItemId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  // Update pantry item expiration date
+  async updatePantryItemExpiration(pantryItemId: string, expirationDate: string | null) {
+    const { data, error } = await supabase
+      .from('user_pantry_items')
+      .update({ expiration_date: expirationDate })
+      .eq('id', pantryItemId)
       .select()
       .single();
     
@@ -170,6 +221,50 @@ export const pantryUtils = {
     
     if (error) throw error;
   },
+
+  // Get ingredient macros
+  async getIngredientMacros(ingredientId: string) {
+    const { data, error } = await supabase
+      .from('ingredients')
+      .select('protein_per_100g, carbs_per_100g, fats_per_100g')
+      .eq('id', ingredientId)
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  // Calculate total macros for a pantry item
+  async calculatePantryItemMacros(pantryItemId: string) {
+    const { data: pantryItem, error: pantryError } = await supabase
+      .from('user_pantry_items')
+      .select(`
+        quantity,
+        unit,
+        ingredients:ingredient_id (
+          protein_per_100g,
+          carbs_per_100g,
+          fats_per_100g
+        )
+      `)
+      .eq('id', pantryItemId)
+      .single();
+    
+    if (pantryError) throw pantryError;
+    
+    const ingredient = pantryItem.ingredients as any;
+    const quantity = pantryItem.quantity;
+    
+    // For now, we'll assume the quantity is in grams for macro calculation
+    // In a real app, you'd have conversion factors for different units
+    const conversionFactor = quantity / 100; // assuming quantity is in grams
+    
+    return {
+      protein: ingredient.protein_per_100g * conversionFactor,
+      carbs: ingredient.carbs_per_100g * conversionFactor,
+      fats: ingredient.fats_per_100g * conversionFactor,
+    };
+  },
 };
 
 // Recipe utilities
@@ -191,7 +286,10 @@ export const recipeUtils = {
           unit,
           ingredients (
             id,
-            name
+            name,
+            protein_per_100g,
+            carbs_per_100g,
+            fats_per_100g
           )
         )
       `);
@@ -232,7 +330,10 @@ export const recipeUtils = {
           ingredients (
             id,
             name,
-            category
+            category,
+            protein_per_100g,
+            carbs_per_100g,
+            fats_per_100g
           )
         )
       `)
